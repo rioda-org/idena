@@ -1,5 +1,5 @@
 #!/bin/bash
-apt-get install unzip curl screen openssh-server -y
+apt-get install unzip curl screen -y
 mkdir datadir
 cd datadir
 mkdir idenachain.db
