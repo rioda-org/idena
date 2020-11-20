@@ -1,10 +1,13 @@
 #!/bin/bash
 apt-get install unzip curl screen openssh-server -y
 
-mkdir datadir && cd datadir
-mkdir idenachain.db && cd idenachain.db
+mkdir datadir
+cd datadir
+mkdir idenachain.db
+cd idenachain.db
 wget "https://idena.site/idenachain.db.zip"
-unzip idenachain.db.zip && rm idenachain.db.zip
+unzip idenachain.db.zip
+rm idenachain.db.zip
 cd ..
 cd ..
 
