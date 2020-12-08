@@ -33,7 +33,9 @@ npm i npm@latest -g
 git clone https://github.com/idena-network/idena-node-proxy
 npm i -g pm2
 
-apikey=$(<"/root/datadir/api.key")
+cd datadir
+apikey=$(<"api.key")
+cd ..
 
 cd idena-node-proxy
 
@@ -42,5 +44,5 @@ IDENA_URL=\"http://localhost:9009\"
 IDENA_KEY=\"'$apikey'\"
 PORT=80" > .env'
 
-npm install
+npm installna
 npm start
