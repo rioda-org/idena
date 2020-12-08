@@ -16,7 +16,17 @@ curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest \
 | wget -qi -
 mv idena-* idena-go && chmod +x idena-go
 bash -c 'echo "{\"IpfsConf\":{\"Profile\": \"server\" ,\"FlipPinThreshold\":1},\"Sync\": {\"LoadAllFlips\": true}}" > config.json'
-screen -dmS idena ./idena-go --config=/root/config.json
+
+touch node-restarted.log
+
+bash -c 'while :
+do
+./idena-go --config=config.json
+date >> node-restarted.log
+done' > start
+
+chmod +x start
+screen -dmS idena ./start
 
 npm i npm@latest -g
 git clone https://github.com/idena-network/idena-node-proxy
