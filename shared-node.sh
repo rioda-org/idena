@@ -44,5 +44,5 @@ IDENA_URL=\"http://localhost:9009\"
 IDENA_KEY=\"'$apikey'\"
 PORT=80" > .env'
 
-npm installna
+npm install
 npm start
