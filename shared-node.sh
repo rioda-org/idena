@@ -24,7 +24,7 @@ do
 ./idena-go --config=config.json
 date >> node-restarted.log
 sleep 3
-done"' > start
+done" > start'
 
 chmod +x start
 screen -dmS idena ./start
@@ -40,7 +40,7 @@ cd idena-node-proxy
 bash -c 'echo "AVAILABLE_KEYS=[\"api1\",\"api2\"]
 IDENA_URL=\"http://localhost:9009\"
 IDENA_KEY=\"'$apikey'\"
-PORT=80"' > .env
+PORT=80" > .env'
 
 npm install
 npm start
