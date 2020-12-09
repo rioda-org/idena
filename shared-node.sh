@@ -23,7 +23,6 @@ bash -c 'echo "while :
 do
 ./idena-go --config=config.json
 date >> node-restarted.log
-sleep 3
 done" > start'
 
 chmod +x start
