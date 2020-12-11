@@ -7,5 +7,7 @@ apt-get install unzip
 wget "https://idena.site/idenachain.db.zip"
 unzip idenachain.db.zip
 rm idenachain.db.zip
+cd ..
+cd ..
 idena-manager enable
 idena-manager status
