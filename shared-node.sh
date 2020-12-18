@@ -45,3 +45,4 @@ PORT=80" > .env'
 
 npm install
 npm start
+reboot
