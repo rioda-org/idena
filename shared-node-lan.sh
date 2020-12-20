@@ -1,5 +1,5 @@
 #!/bin/bash
-apt-get install unzip curl screen -y
+sudo apt-get install unzip curl screen -y
 mkdir shared-node
 cd shared-node
 mkdir datadir
