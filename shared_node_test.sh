@@ -20,11 +20,11 @@ do
 date >> node-restarted.log
 done" > start'
 chmod +x start
-(crontab -l 2>/dev/null; echo "@reboot screen -dmS node '$PWD'/start") | crontab -
+(crontab -l 2>/dev/null; echo "@reboot screen -dmS node $PWD/start") | crontab -
 bash -c 'echo "screen -S node -X quit
 screen -dmS node /root/start" > restart'
 chmod +x restart
-(crontab -l 2>/dev/null; echo "0 0 * * * '$PWD'/restart") | crontab -
+(crontab -l 2>/dev/null; echo "0 0 * * * $PWD/restart") | crontab -
 npm i npm@latest -g
 git clone https://github.com/idena-network/idena-node-proxy
 npm i -g pm2
