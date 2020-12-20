@@ -14,4 +14,11 @@ cd ..
 curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest | grep browser_download_url | grep idena-node-linux-0.* | cut -d '"' -f 4 | wget -qi -
 mv idena-* idena-go && chmod +x idena-go
 bash -c 'echo "{\"IpfsConf\":{\"Profile\": \"server\" ,\"FlipPinThreshold\":1},\"Sync\": {\"LoadAllFlips\": true}}" > config.json'
-screen -dmS idena ./idena-go --config=config.json --apikey=123
+touch node-restarted.log
+bash -c 'echo "while :
+do
+./idena-go --config=config.json --apikey=123
+date >> node-restarted.log
+done" > start'
+chmod +x start
+screen -dmS node ./start
