@@ -1,6 +1,6 @@
 #!/bin/bash
-apt-get update && apt-get upgrade -y
-apt-get install git npm unzip curl screen -y
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install git npm unzip curl screen -y
 
 mkdir datadir && cd datadir
 mkdir idenachain.db && cd idenachain.db
@@ -21,28 +21,24 @@ touch node-restarted.log
 
 bash -c 'echo "while :
 do
-./idena-go --config=config.json
+./idena-go --config=config.json --apikey=123
 date >> node-restarted.log
 done" > start'
-
 chmod +x start
-screen -dmS idena ./start
+(crontab -l 2>/dev/null; echo "@reboot screen -dmS node '$PWD'/start") | crontab -
 
 npm i npm@latest -g
 git clone https://github.com/idena-network/idena-node-proxy
 npm i -g pm2
 
-cd datadir
-apikey=$(<"api.key")
-cd ..
-
 cd idena-node-proxy
 
 bash -c 'echo "AVAILABLE_KEYS=[\"api1\",\"api2\"]
 IDENA_URL=\"http://localhost:9009\"
-IDENA_KEY=\"'$apikey'\"
+IDENA_KEY=\"123\"
 PORT=80" > .env'
 
 npm install
 npm start
+pm2 startup
 reboot
