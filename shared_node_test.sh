@@ -35,4 +35,5 @@ IDENA_KEY=\"123\"
 PORT=80" > .env'
 npm install
 npm start
+pm2 startup
 sudo reboot
