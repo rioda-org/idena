@@ -4,7 +4,7 @@ sudo apt-get install git npm unzip curl screen -y
 mkdir datadir && cd datadir
 mkdir idenachain.db && cd idenachain.db
 #wget "https://idena.site/idenachain.db.zip"
-wget "https://sync.idena-ar.com/idenachain.db.zip"
+wget "https://sync.idena.site/idenachain.db.zip"
 unzip idenachain.db.zip && rm idenachain.db.zip
 cd .. && cd ..
 curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest \
