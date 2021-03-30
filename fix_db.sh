@@ -1,6 +1,7 @@
 killall screen
 cd datadir
 rm -r idenachain.db
+rm -r ipfs
 mkdir idenachain.db
 cd idenachain.db
 apt-get install unzip
