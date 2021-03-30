@@ -37,7 +37,9 @@ cd idena-node-proxy
 bash -c 'echo "AVAILABLE_KEYS=[\"api1\",\"api2\"]
 IDENA_URL=\"http://localhost:9009\"
 IDENA_KEY=\"123\"
-PORT=80" > .env'
+PORT=80
+GOD_API_KEY=\"test\"
+REMOTE_KEYS_ENABLED=0" > .env'
 
 npm install
 npm start
