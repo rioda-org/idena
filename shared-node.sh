@@ -23,7 +23,7 @@ touch node-restarted.log
 
 bash -c 'echo "while :
 do
-./idena-go --config=config.json --apikey=123
+./idena-go --config=config.json --profile=shared --apikey=123
 date >> node-restarted.log
 done" > start'
 chmod +x start
