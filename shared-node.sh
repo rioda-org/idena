@@ -1,7 +1,7 @@
 #!/bin/bash
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
-curl -fsL bit.ly/node-installer | bash
+sudo curl -fsL bit.ly/node-installer | bash
 
 mkdir datadir && cd datadir
 mkdir idenachain.db && cd idenachain.db
