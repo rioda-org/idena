@@ -48,6 +48,7 @@ git clone https://github.com/idena-network/idena-node-proxy
 npm i -g pm2
 
 cd idena-node-proxy
+wget https://raw.githubusercontent.com/rioda-org/idena/main/index.html
 
 bash -c 'echo "AVAILABLE_KEYS=[\"api1\",\"api2\"]
 IDENA_URL=\"http://localhost:9009\"
