@@ -19,6 +19,9 @@ curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest \
 mv idena-* idena-go && chmod +x idena-go
 bash -c 'echo "{\"IpfsConf\":{\"Profile\": \"server\" ,\"FlipPinThreshold\":1},\"Sync\": {\"LoadAllFlips\": true}}" > config.json'
 
+#this is conf for minimal test node
+#bash -c 'echo "{\"P2P\":{\"MaxInboundPeers\":4,\"MaxOutboundPeers\":1},\"IpfsConf\":{\"Profile\":\"server\",\"BlockPinThreshold\":0.1,\"FlipPinThreshold\":0.1}}" > config.json'
+
 touch node-restarted.log
 
 tee update << 'EOF'
