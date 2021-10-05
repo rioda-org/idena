@@ -40,6 +40,11 @@ echo Update was successfull
 EOF
 chmod +x update
 
+tee version << 'EOF'
+curl 'http://127.0.0.1:9009/' -H 'Content-Type: application/json' --data '{"method":"dna_version","params":[{}],"id":1,"key":"123"}'
+EOF
+chmod +x version
+
 bash -c 'echo "while :
 do
 ./idena-go --config=config.json --profile=shared --apikey=123
