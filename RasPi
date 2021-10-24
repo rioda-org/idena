@@ -33,13 +33,13 @@ gcc -v
 sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo "/swapfile2 none swap sw 0 0" | sudo tee -a /etc/fstab
 
 # download idena node source code and compile it
-wget https://github.com/idena-network/idena-go/archive/refs/tags/v0.27.3-rc1.tar.gz
-tar -xf v0.27.3-rc1.tar.gz
-cd idena-go-0.27.3-rc1
-sed -i 's/version = "0.0.1"/version = "0.27.3"/g' main.go
+wget https://github.com/idena-network/idena-go/archive/refs/tags/v0.27.2.tar.gz
+tar -xf v0.27.2.tar.gz
+cd idena-go-0.27.2
+sed -i 's/version = "0.0.1"/version = "0.27.2"/g' main.go
 go build
 mv idena-go ..
-rm -r idena-go-0.27.3-rc1  v0.27.3-rc1.tar.gz
+rm -r idena-go-0.27.2 v0.27.2.tar.gz
 screen -dmS idena ./idena-go --rpcaddr=0.0.0.0 --apikey=123
 
 # Now you can connect Desktop app to your node using parameters
