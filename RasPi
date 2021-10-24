@@ -39,6 +39,7 @@ cd idena-go-0.27.2
 sed -i 's/version = "0.0.1"/version = "0.27.2"/g' main.go
 go build
 mv idena-go ..
+cd ..
 rm -r idena-go-0.27.2 v0.27.2.tar.gz
 screen -dmS idena ./idena-go --rpcaddr=0.0.0.0 --apikey=123
 
