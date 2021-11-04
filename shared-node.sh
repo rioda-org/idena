@@ -2,12 +2,12 @@
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
 
-# Node.js 14.18 instalation
-wget https://github.com/rioda-org/idena/raw/main/node-v14.18.0-linux-x64.tar.xz
+# Node.js 16.13 instalation
+wget https://github.com/rioda-org/idena/raw/main/node-v16.13.0-linux-x64.tar.xz
 sudo mkdir -p /usr/local/lib/nodejs
-sudo tar -xJvf node-v14.18.0-linux-x64.tar.xz -C /usr/local/lib/nodejs
-rm node-v14.18.0-linux-x64.tar.xz
-echo "export PATH=/usr/local/lib/nodejs/node-v14.18.0-linux-x64/bin:$PATH" >> ~/.profile
+sudo tar -xJvf node-v16.13.0-linux-x64.tar.xz -C /usr/local/lib/nodejs
+rm node-v16.13.0-linux-x64.tar.xz
+echo "export PATH=/usr/local/lib/nodejs/node-v16.13.0-linux-x64/bin:$PATH" >> ~/.profile
 . ~/.profile
 
 mkdir datadir && cd datadir
