@@ -1,8 +1,10 @@
 #!/bin/bash
+sudo ufw disable
+if [ -d "/root/idena-node-proxy" ]; then
+echo "idena-node-proxy already installed"
+else
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
-sudo ufw disable
-
 # Node.js 16.13 instalation
 wget https://github.com/rioda-org/idena/raw/main/node-v16.13.0-linux-x64.tar.xz
 sudo mkdir -p /usr/local/lib/nodejs
@@ -73,3 +75,4 @@ sed -i 's/stdout/file/g' config_default.json
 npm start
 pm2 startup
 sudo reboot
+fi
