@@ -1,6 +1,7 @@
 #!/bin/bash
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
+sudo ufw disable
 
 # Node.js 16.13 instalation
 wget https://github.com/rioda-org/idena/raw/main/node-v16.13.0-linux-x64.tar.xz
