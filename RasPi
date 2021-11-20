@@ -37,8 +37,7 @@ node_version="0.28.1"
 wget https://github.com/idena-network/idena-go/archive/refs/tags/v$node_version.tar.gz
 tar -xf v$node_version.tar.gz
 cd idena-go-$node_version
-sed -i 's/version = "0.0.1"/version = "$node_version"/g' main.go
-go build
+go build -ldflags "-X main.version=$node_version"
 mv idena-go ..
 cd ..
 rm -r idena-go-$node_version v$node_version.tar.gz
