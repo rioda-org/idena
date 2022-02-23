@@ -1,0 +1,30 @@
+# install go
+wget https://go.dev/dl/go1.17.7.linux-armv6l.tar.gz
+sudo tar -C /usr/local -xzf go1.17.7.linux-armv6l.tar.gz
+rm go1.17.7.linux-armv6l.tar.gz
+
+# setup path for go
+echo "PATH=$PATH:/usr/local/go/bin
+GOPATH=$HOME/go" >> ~/.profile
+source ~/.profile
+
+# install go c compiler
+sudo apt install gcc -y
+
+# check if go and c installed ok
+go version
+gcc -v
+
+# setup 1GB of swap
+sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo "/swapfile2 none swap sw 0 0" | sudo tee -a /etc/fstab
+
+node_version="0.28.5"
+# download idena node source code and compile it
+wget https://github.com/idena-network/idena-go/archive/refs/tags/v$node_version.tar.gz
+tar -xf v$node_version.tar.gz
+cd idena-go-$node_version
+go build -ldflags "-X main.version=$node_version"
+mv idena-go ..
+cd ..
+rm -r idena-go-$node_version v$node_version.tar.gz
+screen -dmS idena ./idena-go --rpcaddr=0.0.0.0 --apikey=123
