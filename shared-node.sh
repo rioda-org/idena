@@ -5,13 +5,9 @@ echo "idena-node-proxy already installed"
 else
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
-# Node.js 17.1 instalation
-wget https://nodejs.org/download/release/v17.1.0/node-v17.1.0-linux-x64.tar.xz
-sudo mkdir -p /usr/local/lib/nodejs
-sudo tar -xJvf node-v17.1.0-linux-x64.tar.xz -C /usr/local/lib/nodejs
-rm node-v17.1.0-linux-x64.tar.xz
-echo "export PATH=/usr/local/lib/nodejs/node-v17.1.0-linux-x64/bin:$PATH" >> ~/.profile
-. ~/.profile
+# Node.js instalation
+curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
 mkdir datadir && cd datadir
 mkdir idenachain.db && cd idenachain.db
@@ -56,7 +52,7 @@ done" > start'
 chmod +x start
 (crontab -l 2>/dev/null; echo "@reboot screen -dmS node $PWD/start") | crontab -
 
-npm i npm@latest -g
+#npm i npm@latest -g
 git clone https://github.com/idena-network/idena-node-proxy
 npm i -g pm2
 
