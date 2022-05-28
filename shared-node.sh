@@ -5,12 +5,12 @@ echo "idena-node-proxy already installed"
 else
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install git unzip curl screen -y
-# Node.js 17.9 instalation
-wget https://nodejs.org/download/release/v17.9.0/node-v17.9.0-linux-arm64.tar.xz
+# Node.js 17.1 instalation
+wget https://nodejs.org/download/release/v17.1.0/node-v17.1.0-linux-x64.tar.gz
 sudo mkdir -p /usr/local/lib/nodejs
-sudo tar -xJvf node-v17.9.0-linux-x64.tar.xz -C /usr/local/lib/nodejs
-rm node-v17.9.0-linux-x64.tar.xz
-echo "export PATH=/usr/local/lib/nodejs/node-v17.9.0-linux-x64/bin:$PATH" >> ~/.profile
+sudo tar -xJvf node-v17.1.0-linux-x64.tar.gz -C /usr/local/lib/nodejs
+rm node-v17.1.0-linux-x64.tar.gz
+echo "export PATH=/usr/local/lib/nodejs/node-v17.1.0-linux-x64/bin:$PATH" >> ~/.profile
 . ~/.profile
 
 mkdir datadir && cd datadir
