@@ -9,11 +9,11 @@ sudo apt-get install git unzip curl screen -y
 curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
-# mkdir datadir && cd datadir
-# mkdir idenachain.db && cd idenachain.db
-# wget "https://sync.idena.site/idenachain.db.zip"
-# unzip idenachain.db.zip && rm idenachain.db.zip
-# cd ../..
+mkdir datadir && cd datadir
+mkdir idenachain.db && cd idenachain.db
+wget "https://pool.idena.site/idenachain.db.zip"
+unzip idenachain.db.zip && rm idenachain.db.zip
+cd ../..
 
 curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest \
 | grep browser_download_url \
