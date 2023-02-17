@@ -32,7 +32,7 @@ gcc -v
 # setup 1GB of swap
 sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo "/swapfile2 none swap sw 0 0" | sudo tee -a /etc/fstab
 
-node_version="0.30.0"
+node_version="1.0.0"
 # download idena node source code and compile it
 wget https://github.com/idena-network/idena-go/archive/refs/tags/v$node_version.tar.gz
 tar -xf v$node_version.tar.gz
