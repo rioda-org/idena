@@ -1,0 +1,1908 @@
+#!/bin/bash
+
+# shellcheck disable=SC2034
+verbose=0
+command=""
+VERSION="v0.3"
+donation_address="0xfd2282319c9bfff367260b2192a917c40505852e"
+
+
+#trap 'kill $(jobs -p)' EXIT
+
+show_help()
+{
+	echo -e "Usage: bash [-h] $0 command" \
+	"\n" \
+	"Commands:" "\n" \
+	"" "1) add [options]" "\t\t\t\t\t" "Add new node instance" "\n" \
+	"\t" "Options:" "\n" \
+	"\t" "-l location" "\t\t\t\t\t" "location specifies where you want to install the node instance" "\n" \
+	"\t" "-p port_num" "\t\t\t\t\t" "Starting listening port number. Default: 40404" "\n" \
+	"\t" "-i port_num" "\t\t\t\t\t" "Starting Ipfs port number. Default 40405. If none selected, script will use" \
+	"listening port number as a starting point" "\n" \
+	"\t" "-r port_num" "\t\t\t\t\t" "Starting RPC port number. Default 9009" "\n" \
+	"\t" "-a api_key" "\t\t\t\t\t" "API key (for first instance). If empty, random will be generated" "\n" \
+	"\t" "-n nodekey" "\t\t\t\t\t" "Nodekey (for first instance). If empty, random will be generated" "\n" \
+	"\n" \
+	"" "2) update [force]" "\t\t\t\t\t" "Update node version on all instances" "\n" \
+	"" "3) node-update [force]" "\t\t\t\t" "Update node instances" "\n" \
+	"" "4) enable [node [node [node]]]" "\t\t\t" "Enable node server. If no node identificator is sent, all nodes "\
+	"will be enabled. " "\n" \
+	"\t\t\t\t\t\t\t" "Example: enable 1 2 - will enable node 1 and node 2" "\n" \
+	"" "5) disable [node [node [node]]]" "\t\t\t" "Disable node server. If no node identificator is sent, all nodes "\
+	"will be disabled. " "\n" \
+	"\t\t\t\t\t\t\t" "Example: disable 1 2 - will disable node 1 and node 2" "\n" \
+	"" "6) read-logs [node [node [node]]]" "\t\t\t" "Read and listen log files. If no node identifier sent, all " \
+	"will be included in logs. \n" \
+	"\t\t\t\t\t\t\t" "Example: read-logs 1 2 - this will listen on logs for node 1 and 2" "\n" \
+	"" "7) output-logs [node [node [node]]]" "\t\t\t" "Read and listen node output log files. If no node identifier sent, all " \
+	"will be included in logs. \n" \
+	"\t\t\t\t\t\t\t" "Example: output-logs 1 2 - this will listen on logs for node 1 and 2" "\n" \
+	"" "8) error-logs [node [node [node]]]" "\t\t\t" "Read and listen node error log files. If no node identifier sent, all " \
+	"will be included in logs. \n" \
+	"\t\t\t\t\t\t\t" "Example: error-logs 1 2 - this will listen on logs for node 1 and 2" "\n" \
+	"" "9) change-api-key <node_id> [api_key]" "\t\t" "Change API key for a node instance. " "\n" \
+	"\t\t\t\t\t\t\t" "Example: change-api-key 1 - this will ask you for a key and change it on Node ID 1" "\n" \
+	"\t\t\t\t\t\t\t" "Example: change-api-key 1 \"idena\" - this will change API key to \"idena\" on Node ID 1" "\n" \
+	"\t\t\t\t\t\t\t" "Example: change-api-key 1 \"\" - this will generate random API key and apply it to Node ID 1" \
+	"\n" \
+	"" "10) change-node-key <node_id> [node_key]" "\t\t" "Change Node Key for a node instance. " "\n" \
+	"\t\t\t\t\t\t\t" "Example: change-node-key 1 - this will ask you for a key and change it on Node ID 1" "\n" \
+	"\t\t\t\t\t\t\t" "Example: change-node-key 1 \"xxxxx\" - this will change Node Key to \"xxxxx\" on Node ID 1" "\n" \
+	"\n" \
+	"" "11) status" "\t\t\t\t\t\t" "Get status of all node instances (including API keys and ports)" "\n" \
+}
+
+
+enable_node_update()
+{
+	enabled=$(($1))
+
+	[ -z "$enabled" ] && enabled=1
+
+	enabled=$((enabled))
+
+	install_required_packages
+
+	write_json 'allow_node_update' "$enabled"
+}
+
+check_last_seen()
+{
+	response=$(curl -s "https://api.idena.io/api/OnlineIdentity/$1")
+	last_activity=$(echo "$response" | jq -r '.result.lastActivity')
+	result=$(echo "$response" | jq -r '.result')
+	online=$(echo "$response" | jq -r '.result.online')
+
+	if [ -z "$online" ] || [ "$online" == "null" ] || [ "$online" == "false" ];
+	then
+		online=0
+	else
+		online=1
+	fi
+
+	if [ $((online)) -eq 0 ] || [ "$last_activity" == "null" ];
+	then
+		last_seen=$(date +"%s")
+	else
+		last_seen=$(date -d "$last_activity" +"%s")
+	fi
+
+	echo $((last_seen))
+}
+
+set_path()
+{
+	# shellcheck disable=SC2046
+	location=$(dirname $(get_realpath_location "$0"))
+	echo_path=$1
+
+	[ -z "$echo_path" ] && echo_path=1
+
+	if ! grep -Fxq "PATH=\$PATH:$location" ~/.bashrc
+	then
+		echo "PATH=\$PATH:$location" >> ~/.bashrc
+		export PATH=$PATH:$location
+	fi
+
+	if [ $((echo_path)) == 1 ]
+	then
+		echo "$PATH:$location"
+	fi
+}
+
+success_notification()
+{
+	if [ -n "$4" ]
+	then
+		write_notification "" "32" "$1" "$2" "$3" "$4"
+	elif [ -n "$3" ]
+	then
+		write_notification "" "32" "$1" "$2" "$3"
+	elif [ -n "$2" ]
+	then
+		write_notification "" "32" "$1" "$2"
+	elif [ -n "$1" ]
+	then
+		write_notification "" "32" "" "$1"
+	fi
+}
+
+error_notification()
+{
+	if [ -n "$4" ]
+	then
+		write_notification "41" "" "$1" "$2" "$3" "$4"
+	elif [ -n "$3" ]
+	then
+		write_notification "41" "" "$1" "$2" "$3"
+	elif [ -n "$2" ]
+	then
+		write_notification "41" "" "$1" "$2"
+	elif [ -n "$1" ]
+	then
+		write_notification "41" "" "" "$1"
+	fi
+}
+
+write_notification()
+{
+	background_color="$1"
+	foreground_color="$2"
+	prefix="$3"
+	message="$4"
+	suffix="$5"
+	alignment="$6"
+
+	if [ -z "$alignment" ]
+	then
+		alignment="left"
+	fi
+
+	[ -z "$background_color" ] && background_color="49"
+	[ -z "$foreground_color" ] && foreground_color="39"
+
+	len=0
+
+	if [ -n "$TERM" ]
+	then
+		# shellcheck disable=SC2027
+		formatted_message=$(echo -e "$prefix\e[0;"$foreground_color";"$background_color"m$message\e[0m$suffix")
+
+		if [ "$alignment" == "center" ]
+		then
+			columns="$(tput cols)"
+			len=$(( (${#formatted_message} + columns) / 2))
+		elif [ "$alignment" == "right" ]
+		then
+			columns="$(tput cols)"
+			len=$((columns))
+		fi
+	else
+		formatted_message=$(echo -e "$prefix $message $suffix")
+	fi
+
+	printf "%*s\n" $len "$formatted_message" >&2
+}
+
+is_root_user()
+{
+	[ "$(id -u)" -eq 0 ]
+}
+
+read_integer()
+{
+	# $1 - prompt text, $2 - min number - if empty no min, $3 - pre-entered value, $4 - max value
+	[ -n "$3" ] && number="$3"
+	while true; do
+		if [ -z "$number" ]
+		then
+			# shellcheck disable=SC2162
+			read -p "$1" number
+		fi
+		if ! echo "$number" | grep -Eq '^[0-9]+$'
+		then
+			error_notification "Please enter valid number"
+			number=""
+		elif [ -n "$2" ] && [ -n "$4" ]
+		then
+			if ! [ $number -gt "$(($2))" ] || ! [ $number -lt "$(($4))" ]
+			then
+				error_notification "Please enter number larger than $2 and smaller than $4"
+				number=""
+			else
+				break
+			fi
+		elif [ -n "$2" ]
+		then
+			if ! [ $number -gt "$(($2))" ]
+			then
+				error_notification "Please enter number larger than $2"
+				number=""
+			else
+				break
+			fi
+		elif [ -n "$4" ]
+		then
+			if ! [ $number -lt "$(($4))" ]
+			then
+				error_notification "Please enter number smaller than $4"
+				number=""
+			else
+				break
+			fi
+		else
+			break
+		fi
+	done
+
+	echo "$number"
+}
+
+write_json()
+{
+	param_name=$1
+	param_value=$2
+	write_object=$3
+	config_file=$4
+
+	[ -z "$config_file" ] && config_file=~/.idena.config
+
+	[ -z "$write_object" ] && write_object=0
+
+	[ ! -f $config_file ] && echo "{}" > $config_file
+
+	tmp=$(mktemp)
+	if [ "$write_object" -eq 0 ]
+	then
+		jq -c --arg value "$param_value" ".$param_name = \$value" $config_file > "$tmp" && mv "$tmp" $config_file
+	else
+		jq -c ".$param_name = $param_value" $config_file > "$tmp" && mv "$tmp" $config_file
+	fi
+}
+
+get_json()
+{
+	filter=$1
+	config_file=$2
+
+	[ -z "$config_file" ] && config_file=~/.idena.config
+
+	[ ! -f $config_file ] && echo "{}" > $config_file
+
+	# shellcheck disable=SC2005
+	# shellcheck disable=SC2046
+	echo $(jq -rc "$filter" $config_file)
+}
+
+load_ports()
+{
+	ports=()
+	for port in $(get_json '.nodes[]?.listen_port'); do
+		ports+=("$port")
+	done
+
+	for port in $(get_json '.nodes[]?.ipfs_port'); do
+		ports+=("$port")
+	done
+
+	for port in $(get_json '.nodes[]?.rpc_port'); do
+		ports+=("$port")
+	done
+
+	echo "${ports[@]}"
+}
+
+find_next_port()
+{
+	use_port="$1"
+	ports=("$@")
+
+	while (true) do
+		port_occupied=0
+		for i in ${ports[1]}
+		do
+			if [ "$i" -eq "$use_port" ]
+			then
+				port_occupied=1
+			fi
+		done
+
+		[ "$port_occupied" -eq 0 ] && break
+
+		use_port=$((use_port+1))
+	done
+
+	echo "$use_port"
+}
+
+enable()
+{
+	install_required_packages
+
+	nodes=("$@")
+	declare -A nodes_to_enable
+	for node_i in "${nodes[@]:1}"
+	do
+		nodes_to_enable["node$node_i"]=1
+	done
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		if [ "${#nodes_to_enable[@]}" -gt 0 ]
+		then
+			if [[ ${nodes_to_enable["node$id"]} ]]
+			then
+				write_json "nodes[$i].enabled" 1
+			fi
+		else
+			write_json "nodes[$i].enabled" 1
+		fi
+		i=$((i+1))
+	done
+	generate_configs
+}
+
+disable()
+{
+	install_required_packages
+
+	nodes=("$@")
+	declare -A nodes_to_remove
+	for node_i in "${nodes[@]:1}"
+	do
+		nodes_to_remove["node$node_i"]=1
+	done
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		if [ "${#nodes_to_remove[@]}" -gt 0 ]
+		then
+			if [[ ${nodes_to_remove["node$id"]} ]]
+			then
+				write_json "nodes[$i].enabled" 0
+			fi
+		else
+			write_json "nodes[$i].enabled" 0
+		fi
+		i=$((i+1))
+	done
+
+	generate_configs
+}
+
+change_node_key()
+{
+	node_id=$2
+	new_node_key=$3
+
+	if [ -z "$node_id" ]
+	then
+		error_notification "Please specify Node ID"
+		exit 1
+	fi
+
+	if [ -z "$new_node_key" ]
+	then
+		# shellcheck disable=SC2162
+		read -p "Please enter node $node_id Node Key: " new_node_key
+	fi
+
+	if [ -z "$new_node_key" ]
+	then
+		error_notification "You must specify node key in order to change it"
+		exit 1
+	fi
+
+	install_required_packages
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		location=$(echo "$node" | jq -r '.location')
+		if [ "$node_id" == "$id" ]
+		then
+			supervisor_stop "idena:node$id"
+			write_json "nodes[$i].wallet_key" "$new_node_key"
+			mkdir -p "$location/datadir-node$id/keystore"
+			echo "$new_node_key" > "$location/datadir-node$id/keystore/nodekey"
+			success_notification "Changed Node Key for Node ID $node_id to: " "$new_node_key"
+			generate_configs
+
+			break
+		fi
+		i=$((i+1))
+	done
+}
+
+change_api_key()
+{
+	node_id=$2
+	new_api_key=$3
+
+	if [ -z "$node_id" ]
+	then
+		error_notification "Please specify Node ID"
+		exit 1
+	fi
+
+	if [ -z "$new_api_key" ]
+	then
+		# shellcheck disable=SC2162
+		read -p "Please enter node $node_id Api Key (leave empty to automatically generate random key): " new_api_key
+	fi
+
+	if [ -z "$new_api_key" ]
+	then
+		new_api_key=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 13)
+	fi
+
+	install_required_packages
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		if [ "$node_id" == "$id" ]
+		then
+			write_json "nodes[$i].api_key" "$new_api_key"
+			success_notification "Changed API key for Node ID $node_id to: " "$new_api_key"
+			generate_configs
+			break
+		fi
+		i=$((i+1))
+	done
+}
+
+stop_node()
+{
+	supervisor_stop
+}
+
+start_node()
+{
+	supervisor_start
+}
+
+restart_node()
+{
+	supervisor_stop
+	supervisor_start
+}
+
+supervisor_start()
+{
+	if hash supervisorctl 2>/dev/null; then
+		sudo supervisorctl reread > /dev/null
+		sudo supervisorctl update > /dev/null
+
+		if [ -z "$1" ]
+		then
+			sudo supervisorctl start all > /dev/null
+		else
+			sudo supervisorctl start "$1" > /dev/null
+		fi
+	fi
+}
+
+supervisor_stop()
+{
+	if hash supervisorctl 2>/dev/null; then
+		if test -f "/etc/supervisor/conf.d/idena.conf"; then
+        	if [ -z "$1" ]
+        	then
+        		sudo supervisorctl stop idena:* > /dev/null
+			else
+				sudo supervisorctl stop "$1" > /dev/null
+			fi
+		fi
+    fi
+}
+
+supervisor_stop_idena()
+{
+	supervisor_stop "idena:*"
+}
+
+status()
+{
+    success_notification "idena-manager version: " "$VERSION"
+
+    allow_node_update=$(get_json ".allow_node_update")
+	[ "$allow_node_update" == "null" ] && allow_node_update=""
+	[ -z "$allow_node_update" ] && allow_node_update=1
+	if [ $((allow_node_update)) == 0 ]
+	then
+		error_notification "Node automatic update is " "disabled"
+	else
+		success_notification "Node automatic update is " "enabled"
+	fi
+
+    echo
+
+    install_required_packages
+
+    columns="Node ID?|?Status?|?Uptime?|?API Key?|?RPC Port\n"
+
+	num_running=0
+	num_enabled=0
+	num_total=0
+	for node in $(get_json '.nodes[]?'); do
+		num_total=$((num_total+1))
+		enabled=$(echo "$node" | jq -r '.enabled')
+		id=$(echo "$node" | jq -r '.id')
+		api_key=$(echo "$node" | jq -r '.api_key')
+		rpc_port=$(echo "$node" | jq -r '.rpc_port')
+		listen_port=$(echo "$node" | jq -r '.listen_port')
+
+		if [ $((enabled)) -ne 1 ]
+		then
+			columns="$columns$id?|?\e[0;39;41mNot Active\e[0m?|?0?|?$api_key?|?$rpc_port\n"
+			continue
+		fi
+
+		num_enabled=$((num_enabled + 1))
+
+		raw_supervisor_status=$(sudo supervisorctl status "idena:node$id")
+#		raw_supervisor_status="idena:node1                      RUNNING   pid 13053, uptime 2 days, 21:14:23"
+#		raw_supervisor_status="idena:node1                      STOPPED   Mar 24 09:25 PM"
+#		raw_supervisor_status="idena:node1                      FATAL     can't find command 'something'"
+#		raw_supervisor_status="idena:node1                      STARTING  pid 13053"
+
+		supervisor_status="${raw_supervisor_status//  /}"
+		status=$(echo "$supervisor_status" | cut -d " " -f 1 | sed -e "s/idena:node$id//g")
+		uptime=$(echo "$supervisor_status" | cut -d " " -f5-)
+
+		[ -z "$uptime" ] && uptime="0"
+
+		if [ "$status" == "RUNNING" ]
+		then
+			num_running=$((num_running + 1))
+			columns="$columns$id?|?\e[0;32;49m$status\e[0m?|?$uptime?|?$api_key?|?$rpc_port\n"
+		elif [ "$status" == "STARTING" ]
+		then
+			num_running=$((num_running + 1))
+			uptime="0"
+			columns="$columns$id?|?\e[0;32;49m$status\e[0m?|?$uptime?|?$api_key?|?$rpc_port\n"
+		elif [ "$status" == "STOPPED" ]
+		then
+			stopped_at=$(echo "$supervisor_status" | cut -d " " -f2-)
+			[ -z "$stopped_at" ] && stopped_at="0" || stopped_at="Stopped at: $stopped_at"
+			columns="$columns$id?|?\e[0;39;41m$status\e[0m?|?$stopped_at?|?$api_key?|?$rpc_port\n"
+		else
+			columns="$columns$id?|?\e[0;39;41m$status\e[0m?|?0?|?$api_key?|?$rpc_port\n"
+		fi
+
+	done
+
+	if [ $((num_total)) -gt 0 ]
+	then
+		echo -e "$columns" | column -t -x -s "?"
+	fi
+
+	echo
+
+	delimiter=""
+	num_cols=$(tput cols)
+	for i in $(seq 1 "$num_cols"); do
+		delimiter=$delimiter"#"
+	done
+	success_notification "$delimiter"
+	success_notification \
+	"If this idena-manager is helping you, please donate to this idena address " "$donation_address" "" "center"
+	success_notification "$delimiter"
+}
+
+
+supervisor_start_idena()
+{
+	supervisor_start "idena:*"
+}
+
+gave_sudo_notification=0
+
+give_sudo_notification()
+{
+	if ! is_root_user
+	then
+		if [ $((gave_sudo_notification)) -eq 0 ]
+		then
+			mess="You're running this script as a non-root user. This script needs to install some packages for \
+it to work without any problems, so you might be asked to enter your root password during installation"
+			write_notification "43" "30" "" "$mess" "\n"
+			gave_sudo_notification=1
+		fi
+	fi
+}
+
+installed_updates=0
+
+update_packages()
+{
+	if [ $((installed_updates)) -eq 0 ]
+	then
+		give_sudo_notification
+
+		success_notification "[$(date)] " "Installing required packages. Please wait (this can take few minutes)"
+
+		sudo apt-get -qq update > /dev/null
+
+		installed_updates=1
+	fi
+}
+
+adjust_supervisor_sudo_permissions()
+{
+	if ! is_root_user
+	then
+
+		supervisor_adjusted=$(get_json '.supervisor_adjusted')
+
+		if [ -z "$supervisor_adjusted" ] || [ "$supervisor_adjusted" == "null" ] || [ $((supervisor_adjusted)) -ne 1 ]
+		then
+			supervisor_adjusted=0
+		fi
+
+		if [ $((supervisor_adjusted)) -eq 0 ]
+		then
+			give_sudo_notification
+
+			current_user=$(get_user_executor)
+			# shellcheck disable=SC2230
+			supervisorctl_location=$(sudo which supervisorctl)
+
+			if ! sudo cat /etc/sudoers 2>&1 | grep "$current_user" | grep -q "$supervisorctl_location"
+			then
+				echo -e "$current_user\tALL = (root) NOPASSWD: $supervisorctl_location" | \
+				sudo EDITOR='tee -a' visudo 1>/dev/null
+			fi
+
+			write_json 'supervisor_adjusted' 1
+		fi
+	fi
+}
+
+install_required_packages()
+{
+	n_jq=0
+	n_supervisor=0
+	n_pip=0
+	n_superlance=0
+	n_multitail=0
+	n_unzip=0
+
+	if ! hash jq 2>/dev/null;
+	then
+		n_jq=1
+	fi
+
+	if [ $((n_jq)) -gt 0 ]
+	then
+		update_packages
+		success_notification "[$(date)] Installing " "jq"
+		sudo apt-get -qq -y install jq > /dev/null
+		success_notification "[$(date)] Finished installing " "jq"
+	fi
+
+	if ! hash jq 2>/dev/null;
+	then
+		error_notification "Failed to install jq, please try again or contact support!"
+		exit 1
+	fi
+
+	if ! hash supervisorctl 2>/dev/null;
+	then
+		n_supervisor=1
+	else
+		adjust_supervisor_sudo_permissions
+	fi
+
+	if ! hash multitail 2>/dev/null;
+	then
+		n_multitail=1
+	fi
+
+	if ! hash unzip 2>/dev/null;
+	then
+		n_unzip=1
+	fi
+
+	if [ $((n_supervisor + n_pip + n_superlance + n_multitail + n_unzip)) -gt 0 ]
+	then
+		update_packages
+
+		if [ $((n_supervisor)) == 1 ]
+		then
+			sudo apt-get -qq -y install supervisor > /dev/null
+			adjust_supervisor_sudo_permissions
+		fi
+
+		if [ $((n_multitail)) == 1 ]
+		then
+			sudo apt-get -qq -y install multitail > /dev/null
+		fi
+
+		if [ $((n_unzip)) == 1 ]
+		then
+			sudo apt-get -qq -y install unzip > /dev/null
+		fi
+
+		if [ $((n_pip)) == 1 ]
+		then
+			sudo apt-get -qq -y install python-pip > /dev/null
+		fi
+
+		if [ $((n_superlance)) == 1 ]
+		then
+			sudo pip install -q superlance > /dev/null
+		fi
+	fi
+
+	set_path 0
+	setup_autocomplete 0
+}
+
+read_stderr_logs()
+{
+	read_logs "stderr" "$@"
+}
+
+read_output_logs()
+{
+	read_logs "output" "$@"
+}
+
+read_stdout_logs()
+{
+	read_logs "stdout" "$@"
+}
+
+read_logs()
+{
+	install_required_packages
+
+	log_type="$1"
+
+	nodes=("${@:3}")
+	declare -A nodes_to_read
+	for node_i in "${nodes[@]:0}"
+	do
+		nodes_to_read["node$node_i"]=1
+	done
+
+	declare -A files
+
+	i=0
+	file_i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		location=$(echo "$node" | jq -r '.location')
+		read_this=0
+
+		if [ "${#nodes_to_read[@]}" -gt 0 ]
+		then
+			if [[ ${nodes_to_read["node$id"]} ]]
+			then
+				read_this=1
+			fi
+		else
+			read_this=1
+		fi
+
+		if [ $((read_this)) -eq 1 ]
+		then
+			files[$file_i]="-t" file_i=$((file_i+1))
+			if [ "$log_type" == "stderr" ]
+			then
+				files[$file_i]="Node $id Error Log"
+				file_i=$((file_i+1))
+				files[$file_i]="-cT"
+				file_i=$((file_i+1))
+				files[$file_i]="ANSI"
+				file_i=$((file_i+1))
+				files[$file_i]="$location/log_stderr_node$id.log"
+				file_i=$((file_i+1))
+			elif [ "$log_type" == "output" ]
+			then
+				files[$file_i]="Node $id Output Log"
+				file_i=$((file_i+1))
+				files[$file_i]="-cS"
+				file_i=$((file_i+1))
+				files[$file_i]="squid"
+				file_i=$((file_i+1))
+				files[$file_i]="$location/datadir-node$id/logs/output.log"
+				file_i=$((file_i+1))
+			elif [ "$log_type" == "stdout" ]
+			then
+				files[$file_i]="Node $id Log"
+				file_i=$((file_i+1))
+				files[$file_i]="-cT"
+				file_i=$((file_i+1))
+				files[$file_i]="ANSI"
+				file_i=$((file_i+1))
+				files[$file_i]="$location/log_stdout_node$id.log"
+				file_i=$((file_i+1))
+			fi
+		fi
+
+		read_this=0
+		i=$((i+1))
+	done
+
+	multitail "${files[@]}"
+	clear
+}
+
+get_node_file_version()
+{
+	node_file="$1"
+
+	# shellcheck disable=SC2005
+	echo "$($node_file --version | cut -d " " -f 3 | tr -d '^M' | tr -d '\r')"
+}
+
+download_node()
+{
+	download_link="$1"
+	v="$2"
+	download_location="$3"
+
+	if wget -q -nv -O "$download_location" "$download_link"
+	then
+		chmod +x "$download_location"
+		new_file_version=$(get_node_file_version "$download_location")
+		if [ "$new_file_version" != "$v" ]
+		then
+			rm "$download_location"
+			return 0
+		fi
+		return 1
+	else
+		return 0
+	fi
+}
+
+download_file()
+{
+	download_file_link="$1"
+	download_file_location="$2"
+
+	if wget -q -nv -O "$download_file_location" "$download_file_link"
+	then
+		return 1
+	else
+		return 0
+	fi
+}
+
+change_online_status()
+{
+	status=$2
+
+	if [ "$status" != "online" ] && [ "$status" != "offline" ]
+	then
+		error_notification "You need to provide status"
+		exit 1
+	fi
+
+	nodes=("$@")
+	declare -A nodes_to_apply
+	for node_i in "${nodes[@]:1}"
+	do
+		if [ $((node_i)) -le 0 ]
+		then
+			continue
+		fi
+		nodes_to_apply["node$node_i"]=1
+	done
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		enabled=$(echo "$node" | jq -r '.enabled')
+		rpc_port=$(echo "$node" | jq -r '.rpc_port')
+		api_key=$(echo "$node" | jq -r '.api_key')
+		rpc_host=$(echo "$node" | jq -r '.rpc_host')
+
+		if [ $((enabled)) -eq 0 ]
+		then
+			i=$((i+1))
+			continue
+		fi
+
+		if [ "${#nodes_to_apply[@]}" -gt 0 ]
+		then
+			if [[ ${nodes_to_apply["node$id"]} ]]
+			then
+				set_online_status "$status" "$id" "$rpc_host" "$rpc_port"
+			fi
+		else
+			set_online_status "$status" "$id" "$rpc_host" "$rpc_port"
+		fi
+		i=$((i+1))
+	done
+}
+
+set_online_status()
+{
+	status="$1"
+	node_id="$2"
+	rpc_host="$3"
+	rpc_port="$4"
+
+	if [ "$status" == "online" ]
+	then
+		method="dna_becomeOnline"
+		method_id=2
+	else
+		method="dna_becomeOffline"
+		method_id=1
+	fi
+
+	while (true);
+	do
+		success_notification "Updating status to $status for Node ID " "$node_id"
+		data=$(jq -nc "{\
+				method: \"$method\",\
+				params: [{}],\
+				id: $((method_id)),\
+				key: \"$api_key\"\
+				}")
+
+		response=$(curl -s \
+			-H "Accept: application/json" \
+			-H "Content-Type:application/json" \
+			-X POST \
+			--data \
+			"$data" \
+			"http://$rpc_host:$rpc_port")
+
+		result=$(echo "$response" | jq -r '.result')
+
+		if [ -n "$result" ] && [ "$result" != "null" ]
+		then
+			success_notification " " "Successfully started changing to $status for Node ID $node_id" \
+				"Result: $result, Response: $response"
+			break
+		else
+			error_notification " " "Failed to change status to $status for Node ID $node_id" \
+				"Result: $result, Response: $response"
+			success_notification "Waiting one sec for retry"
+			sleep 1
+		fi
+	done
+}
+
+do_update_nodes()
+{
+	git_api_result=$(curl -s https://api.github.com/repos/idena-network/idena-go/releases/latest)
+
+	latest_version=$(echo "$git_api_result" | jq -r '.tag_name'| cut -d "v" -f 2)
+
+	if [ -z "$latest_version" ] || [ "$latest_version" == "null" ]
+	then
+		error_notification "Failed to fetch latest node version"
+		return 0
+	fi
+
+	download_link=""
+	for link in $(echo "$git_api_result" | jq -r '.assets[]?.browser_download_url'); do
+		if [[ "$link" == *"-linux-"* ]]
+		then
+			download_link="$link"
+			break
+		fi
+	done
+
+	should_update=0
+	download_location=""
+	idenachain_db_zip_file=""
+
+	for node in $(get_json '.nodes[]?'); do
+		id=$(echo "$node" | jq -r '.id')
+		location=$(echo "$node" | jq -r '.location')
+
+		if test -f "$location/idena-node-linux-latest"; then
+			node_version=$(get_node_file_version "$location/idena-node-linux-latest")
+			if [ ! "$node_version" = "$latest_version" ]
+			then
+				should_update=1
+				download_location="$location/idena-node-linux-latest-temp"
+				break
+			fi
+		else
+			should_update=1
+			download_location="$location/idena-node-linux-latest-temp"
+
+			idenachain_db_zip_file="$location/idenachain.db.zip"
+			break
+		fi
+	done
+
+	if [ $((should_update)) -eq 1 ]
+	then
+		supervisor_stop
+
+		if [ -n "$idenachain_db_zip_file" ]
+		then
+			download_file "https://sync.idena.site/idenachain.db.zip" "$idenachain_db_zip_file"
+
+			success=$?
+			if [ $success == 1 ]
+			then
+				success_notification "Finished downloading idenachain.db file"
+				if ! hash unzip 2>/dev/null;
+				then
+					install_required_packages
+				fi
+			else
+				error_notification "Failed to download idenachain.db file"
+				idenachain_db_zip_file=""
+			fi
+		fi
+
+		download_node "$download_link" "$latest_version" "$download_location"
+		success=$?
+		if [ $success == 1 ]
+		then
+			success_notification "Finished downloading node binary: " "$latest_version"
+		else
+			error_notification "Failed to download node binary"
+			return
+		fi
+
+		for node in $(get_json '.nodes[]?'); do
+			id=$(echo "$node" | jq -r '.id')
+			location=$(echo "$node" | jq -r '.location')
+
+			cp -f "$download_location" "$location/idena-node-linux-latest"
+
+			if [ -n "$idenachain_db_zip_file" ]
+			then
+				mkdir -p "$location/datadir-node$i/idenachain.db/"
+				# shellcheck disable=SC2012
+				count_files_idenachain=$(ls "$location/datadir-node$i/idenachain.db/" | wc -l)
+				if [ $((count_files_idenachain)) -le 0 ]
+				then
+					unzip -qq "$idenachain_db_zip_file" -d "$location/datadir-node$i/idenachain.db/"
+				fi
+			fi
+		done
+
+		rm "$download_location"
+		if [ -n "$idenachain_db_zip_file" ]
+		then
+			rm "$idenachain_db_zip_file"
+		fi
+
+		supervisor_start
+		success_notification "All nodes have been updated to: " "$latest_version"
+	fi
+}
+
+node_update()
+{
+	if [ ! "$2" == "force" ]
+	then
+		allow_node_update=$(get_json ".allow_node_update")
+
+		[ "$allow_node_update" == "null" ] && allow_node_update=""
+
+		[ -z "$allow_node_update" ] && allow_node_update=1
+
+		if [ $((allow_node_update)) == 0 ]
+		then
+			error_notification "Node update is disabled"
+			return 1
+		fi
+	fi
+
+	timestamp=$(date +"%s")
+
+	response=$(curl -s "https://api.idena.io/api/epoch/last?_=$timestamp" | jq -r '.result.validationTime')
+	next_validation=$(date -d "$response" +"%s")
+	less_than="$((next_validation - 1800))"
+	greater_than="$((next_validation + 3600))"
+
+	if [ $((timestamp)) -lt $((less_than)) ] || [ $((timestamp)) -gt $((greater_than)) ] || [ "$2" == "force" ]
+	then
+		do_update_nodes
+	else
+		success_notification "This is not the best time to update node instances since validation is happening soon"
+		success_notification "If you still want to run the update, run idena-manager node-update force"
+	fi
+}
+
+update()
+{
+	node_update "$@"
+}
+
+generate_configs()
+{
+	# shellcheck disable=SC2046
+	manager_location=$(dirname $(get_realpath_location "$0"))
+	manager_self=$(get_realpath_location "$0")
+
+	supervisor_group="[group:idena]\nprograms="
+	supervisor_conf=""
+
+	username=$(get_user_executor)
+
+	supervisor_stop
+
+	i=0
+	for node in $(get_json '.nodes[]?'); do
+		enabled=$(echo "$node" | jq -r '.enabled')
+
+		if [ ! $((enabled)) -eq 1 ]
+		then
+			continue
+		fi
+
+		id=$(echo "$node" | jq -r '.id')
+		location=$(echo "$node" | jq -r '.location')
+		listen_port=$(echo "$node" | jq -r '.listen_port')
+		ipfs_port=$(echo "$node" | jq -r '.ipfs_port')
+		rpc_port=$(echo "$node" | jq -r '.rpc_port')
+		api_key=$(echo "$node" | jq -r '.api_key')
+		wallet_key=$(echo "$node" | jq -r '.wallet_key')
+		rpc_host=$(echo "$node" | jq -r '.rpc_host')
+		ipfs_profile=$(echo "$node" | jq -r '.ipfs_profile')
+
+		mkdir -p "$location/datadir-node$id/keystore"
+		if [ -n "$wallet_key" ]
+		then
+			echo "$wallet_key" > "$location/datadir-node$id/keystore/nodekey"
+		fi
+
+		echo "$api_key" > "$location/datadir-node$id/api.key"
+
+		write_json "" "{\
+		DataDir: \"$location/datadir-node$id\",\
+		P2P: {\
+			ListenAddr: \":$listen_port\",\
+			NoDiscovery: false\
+		},\
+		RPC: {\
+			HTTPHost: \"$rpc_host\",\
+			HTTPPort: $((rpc_port))\
+		},\
+		IpfsConf: {\
+			DataDir: \"$location/datadir-node$id\",\
+			IpfsPort: $((ipfs_port)),\
+			Profile: \"$ipfs_profile\"\
+		}\
+		}" 1 "$location/config-node$id.json"
+
+		if [ $i -gt 0 ]
+		then
+			supervisor_group=$supervisor_group","
+		fi
+		supervisor_group=$supervisor_group"node$id"
+
+		supervisor_conf=$supervisor_conf"\n"
+		supervisor_conf=$supervisor_conf"[program:node$id]\n"
+		supervisor_conf=$supervisor_conf"directory=$location\n"
+		supervisor_conf=$supervisor_conf"command=$location/idena-node-linux-latest "
+		supervisor_conf=$supervisor_conf"--config=$location/config-%(program_name)s.json --apikey=$api_key\n"
+		supervisor_conf=$supervisor_conf"autorestart=true\n"
+		supervisor_conf=$supervisor_conf"startretries=30\n"
+		if [ -n "$username" ] && [ "$username" != "null" ]
+		then
+			supervisor_conf=$supervisor_conf"user=$username\n"
+		fi
+		supervisor_conf=$supervisor_conf"loglevel=info\n"
+		supervisor_conf=$supervisor_conf"redirect_stderr=false\n"
+		supervisor_conf=$supervisor_conf"stdout_logfile=$location/log_stdout_%(program_name)s.log\n"
+		supervisor_conf=$supervisor_conf"stdout_logfile_maxbytes=1GB\n"
+		supervisor_conf=$supervisor_conf"stdout_logfile_backups=10\n"
+		supervisor_conf=$supervisor_conf"stdout_capture_maxbytes=1GB\n"
+		supervisor_conf=$supervisor_conf"stdout_events_enabled=false\n"
+		supervisor_conf=$supervisor_conf"stderr_logfile=$location/log_stderr_%(program_name)s.log\n"
+		supervisor_conf=$supervisor_conf"stderr_logfile_maxbytes=1GB\n"
+		supervisor_conf=$supervisor_conf"stderr_logfile_backups=10\n"
+		supervisor_conf=$supervisor_conf"stderr_capture_maxbytes=1GB\n"
+		supervisor_conf=$supervisor_conf"std_err_events_enabled=false\n"
+
+		i=$((i+1))
+	done
+
+	install_required_packages
+
+	sudo mkdir -p /etc/supervisor/conf.d/
+	echo -e "$supervisor_group\n$supervisor_conf" | sudo tee /etc/supervisor/conf.d/idena.conf 1>/dev/null
+
+	setup_crontab
+
+	node_update
+
+	supervisor_start
+
+	i=-1
+	for node in $(get_json '.nodes[]?'); do
+		i=$((i+1))
+		enabled=$(echo "$node" | jq -r '.enabled')
+
+		if [ ! $((enabled)) -eq 1 ]
+		then
+			i=$((i+1))
+			continue
+		fi
+
+		id=$(echo "$node" | jq -r '.id')
+		rpc_port=$(echo "$node" | jq -r '.rpc_port')
+		api_key=$(echo "$node" | jq -r '.api_key')
+		rpc_host=$(echo "$node" | jq -r '.rpc_host')
+		address=$(echo "$node" | jq -r '.address')
+		listen_port=$(echo "$node" | jq -r '.listen_port')
+
+		if [ -z "$address" ]
+		then
+			address=$(get_node_address "$rpc_host" "$rpc_port" "$api_key")
+
+			if [ -n "$address" ]
+			then
+				write_json "nodes[$i].address" "$address"
+			fi
+		fi
+
+		success_notification "For Node $id please enable inbound traffic for $listen_port port on the firewall."
+		# shellcheck disable=SC2140
+		success_notification "When connecting your Idena client to Node $id, use $rpc_port port for tunneling, and "\
+"\"$api_key\" as your API key."
+	done
+
+	echo
+
+	#status
+}
+
+get_node_address()
+{
+	host="$1"
+	port="$2"
+	api_key="$3"
+
+	data=$(jq -nc "{\
+		method: \"dna_identity\",\
+		params: [],\
+		id: 1,\
+		key: \"$api_key\"\
+		}")
+
+	repeations=0
+	while (true) do
+		address=$(curl -m 10 -s \
+			-H "Accept: application/json" \
+			-H "Content-Type:application/json" \
+			-X POST \
+			--data \
+			"$data" \
+			"http://$host:$port" | jq -r '.result.address')
+
+		if [ -n "$address" ]
+		then
+			break
+		else
+			sleep 1
+		fi
+
+		[ "$repeations" -gt 10 ] && break
+
+		repeations=$((repeations + 1))
+	done
+
+	echo "$address"
+}
+
+setup_crontab()
+{
+	# shellcheck disable=SC2046
+	manager_location=$(dirname $(get_realpath_location "$0"))
+	ssu="idena-manager-should-self-update"
+	suim="self-updater-idena-manager"
+
+	user=$(get_user_executor)
+
+	if crontab -l 2>&1 | grep -q 'idena-manager update'
+	then
+		crontab -l | grep -v 'idena-manager update' | crontab -
+	fi
+
+	if crontab -l 2>&1 | grep -q 'idena-manager restart'
+	then
+		crontab -l | grep -v 'idena-manager restart' | crontab -
+	fi
+
+	if crontab -l 2>&1 | grep -q $ssu
+	then
+		crontab -l | grep -v $ssu  | crontab -
+	fi
+
+	if ! crontab -l 2>&1 | grep -q 'idena-manager update'
+	then
+		(crontab -l ; echo "*/30 * * * * $manager_location/idena-manager update")| crontab -
+	fi
+
+	if ! crontab -l 2>&1 | grep -q 'idena-manager restart'
+	then
+		(crontab -l ; echo "1 0 * * * $manager_location/idena-manager restart")| crontab -
+	fi
+
+	if ! crontab -l 2>&1 | grep -q $ssu
+	then
+		(crontab -l; echo -e "* * * * * (cd $manager_location; "\
+		"if [ -f \"$ssu\" ]; then ./$suim; rm $ssu; rm ./$suim; fi)")| crontab -
+	fi
+}
+
+get_realpath_location()
+{
+	if hash realpath 2>/dev/null; then
+		# shellcheck disable=SC2005
+		# shellcheck disable=SC2046
+		echo $(realpath -s "$1")
+	elif hash readlink 2>/dev/null; then
+		# shellcheck disable=SC2046
+		# shellcheck disable=SC2005
+		echo $(readlink -m "$1")
+	else
+		echo "$1"
+	fi
+}
+
+add()
+{
+	OPTIND=2
+
+	num_instances=""
+	install_location=""
+
+	while getopts "s:l:p:i:r:a:n:" opt; do
+		case "$opt" in
+		s)
+			num_instances=$OPTARG
+			;;
+		l)
+			install_location=$OPTARG
+			;;
+		p)
+			listening_port_num=$OPTARG
+			;;
+		i)
+			ipfs_port_num=$OPTARG
+			;;
+		r)
+			rpc_port_num=$OPTARG
+			;;
+		a)
+			api_key=$OPTARG
+			[ -z "$api_key" ] && api_key="generate_random_key"
+			;;
+		n)
+			wallet_key=$OPTARG
+			[ -z "$wallet_key" ] && wallet_key="new_installation"
+			;;
+		*)
+			;;
+		esac
+	done
+
+	if [ -z "$install_location" ]
+	then
+		# shellcheck disable=SC2162
+		read -p 'Enter location where to install script (leave empty to install in current directory): ' \
+		-i "$(pwd)" -e install_location
+		if [ -z "$install_location" ]
+		then
+			install_location=$(pwd)
+			success_notification "\tSelected location: " "$install_location"
+		else
+			install_location=$(get_realpath_location "$install_location")
+			if mkdir -p "$install_location"
+			then
+				success_notification "\tSelected location: " "$install_location"
+			else
+				error_notification "Failed to create directory: $install_location"
+				exit 1
+			fi
+		fi
+	else
+		install_location=$(get_realpath_location "$install_location")
+		if mkdir -p "$install_location"
+		then
+			success_notification "\tSelected location: " "$install_location"
+		else
+			error_notification "Failed to create directory: $install_location"
+			exit 1
+		fi
+	fi
+
+	[ -z "$num_instances" ] && num_instances=1
+	num_instances=$(read_integer "How many node instances you want to install (1+): " "0" "$num_instances")
+
+	[ -z "$listening_port_num" ] && listening_port_num=40404
+	listening_port_num=$(read_integer "Please enter Listening port number (default: 40404): " "0" "$listening_port_num")
+	#success_notification "Listening port number: " "$listening_port_num" "If you're behind firewall, please allow " \
+	#"inbound TCP connectiong toward this port"
+
+	[ -z "$ipfs_port_num" ] && ipfs_port_num=40405
+	ipfs_port_num=$(read_integer "Please enter Ipfs port number (default: 40405): " "0" "$ipfs_port_num")
+	#success_notification "Ipfs port number: " "$ipfs_port_num"
+
+	[ -z "$rpc_port_num" ] && rpc_port_num=9009
+	rpc_port_num=$(read_integer "Please enter RPC port number (default: 9009): " "0" "$rpc_port_num")
+
+	existing_number_of_instances=$(get_json '.nodes | length')
+
+	# shellcheck disable=SC2178
+	ports=$(load_ports)
+
+	node_i="$existing_number_of_instances"
+	i=1
+	while [ $((node_i)) -lt $((existing_number_of_instances + num_instances)) ]
+	do
+		listening_port_num=$(find_next_port "$listening_port_num" "${ports[*]}")
+		ports+=("$listening_port_num")
+		ipfs_port_num=$(find_next_port "$ipfs_port_num" "${ports[*]}")
+		ports+=("$ipfs_port_num")
+		rpc_port_num=$(find_next_port "$rpc_port_num" "${ports[*]}")
+		ports+=("$rpc_port_num")
+
+		if [ "$api_key" == "generate_random_key" ]
+		then
+			api_key=""
+		elif [ -z "$api_key" ]
+		then
+			# shellcheck disable=SC2162
+			read -p "Please enter node $i Api Key (leave empty to automatically generate random key): " api_key
+		fi
+		if [ -z "$api_key" ]
+		then
+			api_key=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 13)
+			#printf "\tNode $node_i Api Key is \e[32m$api_key\e[39m\n"
+		fi
+
+		if [ "$wallet_key" == "new_installation" ]
+		then
+			wallet_key=""
+		elif [ -z "$wallet_key" ]
+		then
+			# shellcheck disable=SC2162
+			read -p "Please enter node $i wallet (leave empty if this is first/new installation): " wallet_key
+		fi
+
+		write_json "nodes[$node_i]" "{\
+		id: $((node_i+1)),\
+		location: \"$install_location\",\
+		listen_port: $listening_port_num,\
+		ipfs_port: $ipfs_port_num,\
+		rpc_port: $rpc_port_num,\
+		api_key: \"$api_key\",\
+		wallet_key: \"$wallet_key\",\
+		rpc_host: \"localhost\",\
+		ipfs_profile: \"server\",\
+		enabled: \"1\"\
+		}" 1
+		node_i=$((node_i + 1))
+		i=$((i + 1))
+		api_key=""
+		wallet_key=""
+	done
+
+	generate_configs
+
+	status
+}
+
+normalize_file_location()
+{
+	given_location=$1
+	real_file_location=$2
+
+	real_file_name=$(basename "$real_file_location")
+	real_dir_name=$(dirname "$real_file_location")
+
+	#success_notification "Real file name ($given_location) " "$real_file_name" " $real_file_location"
+
+	# shellcheck disable=SC2005
+	echo "$(get_realpath_location "$real_dir_name")"
+}
+
+get_existing_screen_details()
+{
+	pid=$1
+	# shellcheck disable=SC2124
+	full_command=$@
+
+	if [[ "$full_command" != "/"* ]]
+	then
+		instance_location=$(sudo readlink /proc/"$pid"/exe)
+		screen_location="${full_command%%idena-node-linux*}"
+		instance_dir=$(normalize_file_location "$screen_location" "$instance_location")
+		# shellcheck disable=SC2046
+		IFS=' ' read -r -a parameters <<< $(cut -d " " -f2- <<< "$full_command")
+	else
+		instance_location="${full_command%%idena-node-linux*}"
+		screen_location="$instance_location"
+		instance_dir=$(normalize_file_location "$screen_location" "$instance_location")
+		# shellcheck disable=SC2046
+		IFS=' ' read -r -a parameters <<< $(cut -d " " -f2- <<< "$full_command")
+	fi
+
+	instance="$instance_location ${parameters[*]}"
+
+	config_file=""
+	rpc_port=""
+	rpc_addr=""
+	ipfs_port=""
+	api_key=""
+	datadir_location=""
+	tpc_port=""
+
+	for param in "${parameters[@]}"; do
+		if [[ "$param" == *"="* ]]
+		then
+			delimiter="="
+
+		elif [[ "$param" == *" "* ]]
+		then
+			delimiter=" "
+		fi
+
+		param_name="${param%%$delimiter*}"
+
+		if [ "$param_name" == "--config" ]
+		then
+			config_file=$(cut -d "$delimiter" -f2 <<< "$param")
+
+			if ! test -f "$config_file"
+			then
+				filename=$(basename "$config_file")
+				config_file="$instance_dir/$filename"
+				if ! test -f "$config_file"
+				then
+					error_notification "Config file not found: " "$config_file"
+					continue
+				fi
+			fi
+		fi
+
+		if [ "$param_name" == "--apikey" ]
+		then
+			api_key=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ "$param_name" == "--rpcaddr" ]
+		then
+			rpc_addr=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ "$param_name" == "--rpcport" ]
+		then
+			rpc_port=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ "$param_name" == "--ipfsport" ]
+		then
+			ipfs_port=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ "$param_name" == "--port" ]
+		then
+			tcp_port=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ "$param_name" == "--datadir" ]
+		then
+			datadir_location=$(cut -d "$delimiter" -f2 <<< "$param")
+		fi
+
+		if [ -n "$config_file" ] && test -f "$config_file"
+		then
+			config_content=$(cat "$config_file")
+			[ -z "$rpc_addr" ] && rpc_addr=$(echo "$config_content" | jq -r ".RPC.HTTPHost")
+			[ -z "$rpc_port" ] && rpc_port=$(echo "$config_content" | jq -r ".RPC.HTTPPort")
+			[ -z "$ipfs_port" ] && ipfs_port=$(echo "$config_content" | jq -r ".IpfsConf.IpfsPort")
+			[ -z "$ipfs_port" ] && ipfs_port=$(echo "$config_content" | jq -r ".IpfsConf.IpfsPort")
+			if [ -z "$tcp_port" ]
+			then
+				tcp_port=$(echo "$config_content" | jq -r ".P2P.ListenAddr")
+				tcp_port=$(cut -d ":" -f2- <<< "$tcp_port")
+			fi
+
+			if [ -z "$datadir_location" ]
+			then
+				datadir_location=$(echo "$config_content" | jq -r ".DataDir")
+			fi
+
+			if [ -z "$datadir_location" ]
+			then
+				datadir_location=$(echo "$config_content" | jq -r ".IpfsConf.DataDir")
+			fi
+		fi
+	done
+
+	json="{\"location\":\"$instance_location\",\"screen_location\":\"$screen_location\","
+	json="$json\"config_file\":\"$config_file\",\"api_key\":\"$api_key\",\"rpc_addr\":\"$rpc_addr\","
+	json="$json\"rpc_port\":\"$rpc_port\",\"ipfs_port\":\"$ipfs_port\",\"tcp_port\":\"$tcp_port\","
+	json="$json\"datadir\":\"$datadir_location\",\"instance_dir\":\"$instance_dir\",\"pid\":\"$pid\"}"
+
+	echo "$json"
+}
+
+migrate()
+{
+	OPTIND=2
+	install_location=""
+
+	# shellcheck disable=SC2207
+	# shellcheck disable=SC2009
+	existing_instances=( $(ps -ef | grep "idena-node-linux" | awk '{ print $2 }') )
+
+	instances=()
+	parsed_instances=()
+	for instance_id in "${existing_instances[@]}"; do
+		instance=$(ps -p "$instance_id" -o cmd=)
+
+		[ -z "$instance" ] && continue
+		[[ "$instance" == *"SCREEN"* ]] || [[ "$instance" == *"screen"* ]] && continue
+
+		parsed_instance=$(get_existing_screen_details "$instance_id" "$instance")
+
+		instance_api_key=$(echo "$parsed_instance" | jq -r ".api_key")
+
+		found_in_current_instances=0
+		if [ -n "$instance_api_key" ] && [ "$instance_api_key" != "null" ]
+		then
+			for node in $(get_json '.nodes[]?'); do
+				api_key=$(echo "$node" | jq -r '.api_key')
+
+				if [ "$api_key" == "$instance_api_key" ]
+				then
+					found_in_current_instances=1
+					break
+				fi
+			done
+		fi
+
+		if [ $((found_in_current_instances)) -eq 1 ]
+		then
+			continue
+		fi
+
+		instances+=("$instance")
+		parsed_instances+=("$parsed_instance")
+	done
+
+	if [ $((${#instances[@]})) -eq 0 ]
+	then
+		error_notification "No running instance has been found"
+		exit 0
+	fi
+
+	for i in "${!instances[@]}"; do
+		success_notification "Instance ID $((i+1)): " "${instances[$i]}"
+	done
+
+	i_id=$(read_integer "Please enter Instance ID you want to migrate: " "0" "" $((${#instances[@]} + 1)))
+	i_id=$((i_id-1))
+
+	selected_instance="${instances[$i_id]}"
+	selected_config="${parsed_instances[$i_id]}"
+
+	success_notification "You selected: " "$selected_instance"
+
+	success_notification "\n\nPlease confirm these settings are correct:"
+	config_file=$(echo "$selected_config" | jq -r ".config_file")
+	[ -n "$config_file" ] && \
+		success_notification "\tConfig file location: " "$config_file"
+
+	api_key=$(echo "$selected_config" | jq -r ".api_key")
+	[ -n "$api_key" ] && \
+		success_notification "\tAPI Key: " "$api_key"
+
+#	rpc_addr=$(echo "$selected_config" | jq -r ".rpc_addr")
+#	[ -n "$rpc_addr" ] && \
+#		success_notification "\tRPC Address: " "$rpc_addr"
+
+	rpc_port_num=$(echo "$selected_config" | jq -r ".rpc_port")
+	[ -n "$rpc_port_num" ] && \
+		success_notification "\tRPC Port: " "$rpc_port_num"
+
+	listening_port_num=$(echo "$selected_config" | jq -r ".tcp_port")
+	[ -n "$listening_port_num" ] && \
+		success_notification "\tTCP Port: " "$listening_port_num"
+
+	ipfs_port_num=$(echo "$selected_config" | jq -r ".ipfs_port")
+	[ -n "$ipfs_port_num" ] && \
+		success_notification "\tIPFS Port: " "$ipfs_port_num"
+
+	datadir=$(echo "$selected_config" | jq -r ".datadir")
+	[ -n "$datadir" ] && \
+		success_notification "\tData Directory: " "$datadir"
+
+	install_location=$(echo "$selected_config" | jq -r ".instance_dir")
+	[ -n "$install_location" ] && \
+		success_notification "\tNode is in: " "$install_location"
+
+	if test -f "$datadir/keystore/nodekey";
+	then
+		wallet_key=$(cat "$datadir/keystore/nodekey")
+	else
+		error_notification "Failed to fetch data from this location"
+		exit 1
+	fi
+
+	pid=$(echo "$selected_config" | jq -r ".pid")
+
+	confirm=$(read_integer "Are you sure you want to migrate data? [1 = yes, 0 = no] " "-1" "" "2")
+
+	if [ $((confirm)) -eq 0 ]
+	then
+		exit 0
+	fi
+
+	kill "$pid"
+
+	node_i=$(get_json '.nodes | length')
+
+	write_json "nodes[$node_i]" "{\
+	id: $((node_i+1)),\
+	location: \"$install_location\",\
+	listen_port: $listening_port_num,\
+	ipfs_port: $ipfs_port_num,\
+	rpc_port: $rpc_port_num,\
+	api_key: \"$api_key\",\
+	wallet_key: \"$wallet_key\",\
+	rpc_host: \"localhost\",\
+	ipfs_profile: \"server\",\
+	enabled: \"1\"\
+	}" 1
+
+	success_notification "\n\nPleaes note: " "Remove any custom scripts you have (crontab, etc..)"
+	success_notification "Migration has succeeded"
+	echo -e "\n\n"
+
+	generate_configs
+
+	status
+}
+
+setup_autocomplete()
+{
+	# shellcheck disable=SC2046
+	location=$(dirname $(get_realpath_location "$0"))
+
+	echo_source=$1
+
+	[ -z "$echo_source" ] && echo_source=1
+
+	if ! grep -Fxq "source $location/idena-manager-autocomplete.bash" ~/.bashrc
+	then
+		if test -f "$location/idena-manager-autocomplete.bash"; then
+			echo "source $location/idena-manager-autocomplete.bash" >> ~/.bashrc
+			# shellcheck disable=SC1090
+			source "$location/idena-manager-autocomplete.bash"
+		fi
+	fi
+
+	if [ $((echo_source)) == 1 ]
+	then
+		echo "$location/idena-manager-autocomplete.bash"
+	fi
+}
+
+get_user_executor()
+{
+	user_executor=$(get_json '.user?')
+
+	if [ -z "$user_executor" ] || [ "$user_executor" == "null" ]
+	then
+		if [ -z "$USER" ] || [ "$USER" == "null" ]
+		then
+			owner_user=$(stat -c '%U' "$0")
+
+			if [ -n "$owner_user" ] && [ "$owner_user" != "null" ]
+			then
+				write_json 'user' "$owner_user"
+			fi
+		else
+			write_json 'user' "$USER"
+			user_executor="$USER"
+		fi
+	fi
+
+	echo "$user_executor"
+}
+
+
+case $1 in
+	add|set-path|cron|status|migrate)
+		command=$1
+		OPTIND=2
+		;;
+	regenerate|generate-ssh)
+		command=$1
+		OPTIND=2
+		;;
+	disable|enable)
+		command=$1
+		OPTIND=2
+		;;
+	change-api-key)
+		command=$1
+		OPTIND=2
+		;;
+	change-node-key)
+		command=$1
+		OPTIND=2
+		;;
+	read-logs|error-logs|output-logs)
+		command=$1
+		OPTIND=2
+		;;
+	install)
+		install_required_packages
+		exit 0
+		;;
+	update|node-update)
+		command=$1
+		OPTIND=2
+		;;
+	setup-autocomplete)
+		command=$1
+		OPTIND=2
+		;;
+	start|stop|restart)
+		command=$1
+		OPTIND=2
+		;;
+	check-corrupt-db)
+		command=$1
+		OPTIND=2
+		;;
+	change-online-status)
+		command=$1
+		OPTIND=2
+		;;
+	adjust-sudo-permissions|set-user)
+		command=$1
+		OPTIND=2
+		;;
+	*)
+		OPTIND=1
+esac
+
+[ -z "$command" ] && show_help && exit 0
+
+[ "$command" = "add" ] && add "$@"
+[ "$command" = "update" ] && update "$@"
+[ "$command" = "regenerate" ] && generate_configs
+[ "$command" = "disable" ] && disable "$@"
+[ "$command" = "enable" ] && enable "$@"
+[ "$command" = "node-update" ] && node_update "$@"
+[ "$command" = "set-path" ] && set_path
+[ "$command" = "cron" ] && setup_crontab
+[ "$command" = "status" ] && status "$@"
+[ "$command" = "change-api-key" ] && change_api_key "$@"
+[ "$command" = "change-node-key" ] && change_node_key "$@"
+[ "$command" = "read-logs" ] && read_stdout_logs "$@"
+[ "$command" = "output-logs" ] && read_output_logs "$@"
+[ "$command" = "error-logs" ] && read_stderr_logs "$@"
+[ "$command" = "setup-autocomplete" ] && setup_autocomplete
+[ "$command" = "stop" ] && stop_node "$@"
+[ "$command" = "start" ] && start_node "$@"
+[ "$command" = "restart" ] && restart_node "$@"
+[ "$command" = "migrate" ] && migrate "$@"
+[ "$command" = "change-online-status" ] && change_online_status "$@"
+[ "$command" = "adjust-sudo-permissions" ] && adjust_supervisor_sudo_permissions
+[ "$command" = "set-user" ] && get_user_executor "$@"
+
+shift $((OPTIND-1))
+
+[ "${1:-}" = "--" ] && shift
+
+#echo "verbose=$verbose, command=$command, leftovers=$@"
