@@ -67,30 +67,6 @@ enable_node_update()
 	write_json 'allow_node_update' "$enabled"
 }
 
-check_last_seen()
-{
-	response=$(curl -s "https://api.idena.io/api/OnlineIdentity/$1")
-	last_activity=$(echo "$response" | jq -r '.result.lastActivity')
-	result=$(echo "$response" | jq -r '.result')
-	online=$(echo "$response" | jq -r '.result.online')
-
-	if [ -z "$online" ] || [ "$online" == "null" ] || [ "$online" == "false" ];
-	then
-		online=0
-	else
-		online=1
-	fi
-
-	if [ $((online)) -eq 0 ] || [ "$last_activity" == "null" ];
-	then
-		last_seen=$(date +"%s")
-	else
-		last_seen=$(date -d "$last_activity" +"%s")
-	fi
-
-	echo $((last_seen))
-}
-
 set_path()
 {
 	# shellcheck disable=SC2046
