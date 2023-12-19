@@ -50,7 +50,7 @@ show_help()
 	"\t\t\t\t\t\t\t" "Example: change-node-key 1 - this will ask you for a key and change it on Node ID 1" "\n" \
 	"\t\t\t\t\t\t\t" "Example: change-node-key 1 \"xxxxx\" - this will change Node Key to \"xxxxx\" on Node ID 1" "\n" \
 	"\n" \
-	"" "11) status" "\t\t\t\t\t\t" "Get status of all node instances (including API keys and ports)" "\n" \
+	"" "11) status" "\t\t\t\t\t\t" "Get status of all node instances (including API keys and ports)" "\n"
 }
 
 
