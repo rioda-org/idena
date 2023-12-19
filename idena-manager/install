@@ -4,3 +4,10 @@ wget -q -nv -O idena-manager-autocomplete.bash https://raw.githubusercontent.com
 ./idena-manager install
 export PATH=$(bash idena-manager set-path)
 source $(idena-manager setup-autocomplete)
+
+
+#add fixdb, hdd,
+#df -h
+#tail -F log_stdout_node1.log
+#sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
+#crontab to automine /10 min
