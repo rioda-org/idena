@@ -1,6 +1,6 @@
-wget -q -nv -O idena-manager https://...idena-manager
+wget -q -nv -O idena-manager https://raw.githubusercontent.com/rioda-org/idena/main/idena-manager/idena-manager
 chmod +x idena-manager
-wget -q -nv -O idena-manager-autocomplete.bash https://...idena-manager-autocomplete.bash
+wget -q -nv -O idena-manager-autocomplete.bash https://raw.githubusercontent.com/rioda-org/idena/main/idena-manager/idena-manager-autocomplete.bash
 ./idena-manager install
 export PATH=$(bash idena-manager set-path)
 source $(idena-manager setup-autocomplete)
