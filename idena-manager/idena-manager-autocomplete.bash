@@ -5,7 +5,7 @@ _completions()
 	command=${COMP_WORDS[1]}
 
 	case $command in
-		update|self-update|node-update)
+		update|node-update)
 			if [ "${#COMP_WORDS[@]}" != "3" ]; then
 				return
 			fi
