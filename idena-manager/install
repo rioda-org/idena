@@ -5,9 +5,13 @@ wget -q -nv -O idena-manager-autocomplete.bash https://raw.githubusercontent.com
 export PATH=$(bash idena-manager set-path)
 source $(idena-manager setup-autocomplete)
 
+wget https://raw.githubusercontent.com/rioda-org/idena/main/fixdb_idena_manager.sh && mv fixdb_idena_manager.sh fixdb && chmod +x fixdb
+bash -c 'echo "df -h" > hdd' && chmod +x hdd
+bash -c 'echo "tail -F log_stdout_node1.log" > log' && chmod +x log
+sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
+tee mine << 'EOF'
+curl 'http://127.0.0.1:9009/' -H 'Content-Type: application/json' --data '{"method":"dna_becomeOnline","params":[{}],"id":1,"key":"123"}'
+EOF
+chmod +x mine
+(crontab -l 2>/dev/null; echo "*/10 * * * * $PWD/mine") | crontab -
 
-#add fixdb, hdd,
-#df -h
-#tail -F log_stdout_node1.log
-#sudo fallocate -l 1G /swapfile2 && sudo chmod 600 /swapfile2 && sudo mkswap /swapfile2 && sudo swapon /swapfile2 && echo '/swapfile2 none swap sw 0 0' | sudo tee -a /etc/fstab
-#crontab to automine /10 min
