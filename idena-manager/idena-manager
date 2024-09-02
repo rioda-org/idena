@@ -1224,7 +1224,7 @@ generate_configs()
 			fi
 		fi
 
-		success_notification "For Node $id please enable inbound traffic for $listen_port port on the firewall."
+		success_notification "For Node $id please enable inbound traffic for $listen_port, $ipfs_port port on the firewall."
 		# shellcheck disable=SC2140
 		success_notification "When connecting your Idena client to Node $id, use $rpc_port port for tunneling, and "\
 "\"$api_key\" as your API key."
